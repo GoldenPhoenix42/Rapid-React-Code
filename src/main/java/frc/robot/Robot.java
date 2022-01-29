@@ -36,11 +36,29 @@ public class Robot extends TimedRobot {
   private CANSparkMax m_rearLeft;
   private CANSparkMax m_rearRight;
 
+
   private MotorControllerGroup m_left;
   private MotorControllerGroup m_right;
 
-  private final XboxController m_controller = new XboxController(0);
+  //Ball Storage
+  private CANSparkMax topStorage = new CANSparkMax(0, MotorType.kBrushless);
+  private CANSparkMax bottomStorage = new CANSparkMax(0, MotorType.kBrushless);
 
+  private MotorControllerGroup storage;
+
+  //Arms 
+
+  private CANSparkMax shoulder = new CANSparkMax(0, MotorType.kBrushless);
+  private CANSparkMax winch1 = new CANSparkMax(0, MotorType.kBrushless);
+  // private CANSparkMax winch2 = new CANSparkMax(0, MotorType.kBrushless);
+  // private MotorControllerGroup winch = new MotorControllerGroup(winch1, winch2);
+
+  private CANSparkMax grabber = new CANSparkMax(0, MotorType.kBrushless);
+
+  //Xbox controllers
+  private final XboxController m_controller1 = new XboxController(0);
+  private final XboxController m_controller2 = new XboxController(1);
+  //limelight
   private boolean lemonLight;
 
   /**
@@ -53,25 +71,39 @@ public class Robot extends TimedRobot {
     m_chooser.addOption("My Auto", kCustomAuto);
     SmartDashboard.putData("Auto choices", m_chooser);
 
+    //Wheels 
     m_frontLeft = new CANSparkMax(4, MotorType.kBrushless);
     m_frontRight = new CANSparkMax(2, MotorType.kBrushless);
     m_rearLeft = new CANSparkMax(3, MotorType.kBrushless);
     m_rearRight = new CANSparkMax(5, MotorType.kBrushless);
 
-    m_frontLeft.restoreFactoryDefaults();
-    m_frontRight.restoreFactoryDefaults();
-    m_rearLeft.restoreFactoryDefaults();
-    m_rearRight.restoreFactoryDefaults();
-
     m_left = new MotorControllerGroup(m_frontLeft, m_rearLeft);
     m_right = new MotorControllerGroup(m_frontRight, m_rearRight);
     m_myRobot = new DifferentialDrive(m_left, m_right);
 
+    //launcher 
+    
+    storage = new MotorControllerGroup(topStorage, bottomStorage);
+
+
+    //Limelight
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("camMode").setNumber(1);
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(0);
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
 
     lemonLight = false;
+
+    //Factory Default
+    m_frontLeft.restoreFactoryDefaults();
+    m_frontRight.restoreFactoryDefaults();
+    m_rearLeft.restoreFactoryDefaults();
+    m_rearRight.restoreFactoryDefaults();
+    topStorage.restoreFactoryDefaults();
+    bottomStorage.restoreFactoryDefaults();
+    shoulder.restoreFactoryDefaults();
+    winch1.restoreFactoryDefaults();
+    //winch2.restoreFactoryDefaults();
+    grabber.restoreFactoryDefaults();
   }
 
   /**
@@ -125,9 +157,24 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
-    m_myRobot.tankDrive(-m_controller.getLeftY(), m_controller.getRightY());
+    //Drive
+    m_myRobot.tankDrive(-m_controller1.getLeftY(), m_controller1.getRightY());
     
-    if (m_controller.getYButtonPressed() == true) {
+    //Ball Storage
+    if (m_controller2.getLeftBumperPressed() == true){
+      storage.set(1.0);
+    }
+    else{
+      storage.set(0);
+    }
+
+    //Arm 
+    shoulder.set(m_controller2.getLeftY());
+    winch1.set(m_controller2.getRightY());
+    //winch.set(m_controller2.getRightY());
+
+    //Limelight
+    if (m_controller1.getYButtonPressed() == true) {
       lemonLight = !lemonLight;
     }
 
@@ -142,8 +189,8 @@ public class Robot extends TimedRobot {
   @Override
   public void disabledInit() {
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
-    m_controller.setRumble(RumbleType.kLeftRumble, 0.0);
-    m_controller.setRumble(RumbleType.kRightRumble, 0.0);
+    m_controller1.setRumble(RumbleType.kLeftRumble, 0.0);
+    m_controller1.setRumble(RumbleType.kRightRumble, 0.0);
   }
 
   /** This function is called periodically when disabled. */
@@ -157,7 +204,7 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during test mode. */
   @Override
   public void testPeriodic() {
-    //m_myRobot.tankDrive(-m_controller.getLeftY(), m_controller.getRightY());
-    m_myRobot.arcadeDrive(m_controller.getLeftX(), -m_controller.getLeftY());
+    //m_myRobot.tankDrive(-m_controller1.getLeftY(), m_controller1.getRightY());
+    m_myRobot.arcadeDrive(m_controller1.getLeftX(), -m_controller1.getLeftY());
   }
 }
