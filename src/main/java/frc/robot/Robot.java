@@ -5,6 +5,8 @@
 package frc.robot;
 
 import com.revrobotics.CANSparkMax;
+import com.revrobotics.SparkMaxRelativeEncoder;
+//import com.revrobotics.RelativeEncoder;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 import edu.wpi.first.networktables.NetworkTableInstance;
@@ -16,6 +18,18 @@ import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.DoubleSolenoid;
+import edu.wpi.first.wpilibj.GenericHID;
+import edu.wpi.first.wpilibj.PneumaticsModuleType;
+import edu.wpi.first.wpilibj.Compressor;
+import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
+
+
+import com.ctre.phoenix.motorcontrol.ControlMode;
+import com.ctre.phoenix.motorcontrol.can.VictorSPX;
+import com.ctre.phoenix.motorcontrol.can.TalonSRX;
+
+
 
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -29,6 +43,8 @@ public class Robot extends TimedRobot {
   private static final String kCustomAuto = "My Auto";
   private String m_autoSelected;
   private final SendableChooser<String> m_chooser = new SendableChooser<>();
+
+  private double auto;
   
   private DifferentialDrive m_myRobot;
   private CANSparkMax m_frontLeft;
@@ -36,12 +52,28 @@ public class Robot extends TimedRobot {
   private CANSparkMax m_rearLeft;
   private CANSparkMax m_rearRight;
 
+  private VictorSPX m_backShooter;
+  private VictorSPX m_frontShooter;
+
+  private VictorSPX m_elevator1;
+  private VictorSPX m_elevator2;
+  private VictorSPX m_cargoSlurper;
+
+  private TalonSRX m_shoulder;
+  private TalonSRX m_winch;
+
   private MotorControllerGroup m_left;
   private MotorControllerGroup m_right;
 
   private final XboxController m_controller = new XboxController(0);
+  private final XboxController m_controller2 = new XboxController(1);
 
-  private boolean lemonLight;
+  // Pneumatics
+  private final DoubleSolenoid m_solenoid1 = new DoubleSolenoid(PneumaticsModuleType.CTREPCM, 0, 1);
+  private final Compressor compressor = new Compressor(0, PneumaticsModuleType.CTREPCM);
+
+  boolean enabled = compressor.enabled();
+  boolean pressureSwitch = compressor.getPressureSwitchValue();
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -53,10 +85,24 @@ public class Robot extends TimedRobot {
     m_chooser.addOption("My Auto", kCustomAuto);
     SmartDashboard.putData("Auto choices", m_chooser);
 
+    //drive motors
     m_frontLeft = new CANSparkMax(4, MotorType.kBrushless);
     m_frontRight = new CANSparkMax(2, MotorType.kBrushless);
     m_rearLeft = new CANSparkMax(3, MotorType.kBrushless);
     m_rearRight = new CANSparkMax(5, MotorType.kBrushless);
+    
+    //shooter motors
+    m_backShooter = new VictorSPX(6);
+    m_frontShooter = new VictorSPX(7);
+
+    //elevator and cargo slurper motors
+    m_elevator1 = new VictorSPX(8);
+    m_elevator2 = new VictorSPX(9);
+    m_cargoSlurper = new VictorSPX(10);
+
+    //climb motors
+    m_shoulder = new TalonSRX(11);
+    m_winch = new TalonSRX(12);
 
     m_frontLeft.restoreFactoryDefaults();
     m_frontRight.restoreFactoryDefaults();
@@ -71,7 +117,7 @@ public class Robot extends TimedRobot {
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(0);
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
 
-    lemonLight = false;
+    m_frontLeft.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity();
   }
 
   /**
@@ -85,6 +131,10 @@ public class Robot extends TimedRobot {
   public void robotPeriodic() {
     uptime = Timer.getFPGATimestamp();
     SmartDashboard.putNumber("Uptime", uptime);
+    SmartDashboard.putNumber("Front Left Motor RPM", m_frontLeft.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
+    SmartDashboard.putNumber("Front Right Motor RPM", m_frontRight.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
+    SmartDashboard.putNumber("Rear Left Motor RPM", m_rearLeft.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
+    SmartDashboard.putNumber("Rear Right Motor RPM", m_rearRight.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
   }
 
   /**
@@ -110,10 +160,16 @@ public class Robot extends TimedRobot {
     switch (m_autoSelected) {
       case kCustomAuto:
         // Put custom auto code here
+
         break;
       case kDefaultAuto:
       default:
         // Put default auto code here
+        m_frontShooter.set(ControlMode.PercentOutput, 100);
+        m_backShooter.set(ControlMode.PercentOutput, 100);
+        m_elevator1.set(ControlMode.PercentOutput, 100);
+        m_elevator2.set(ControlMode.PercentOutput, 100);
+        m_cargoSlurper.set(ControlMode.PercentOutput, 100);
         break;
     }
   }
@@ -125,17 +181,49 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
+    //Drive
     m_myRobot.tankDrive(-m_controller.getLeftY(), m_controller.getRightY());
     
-    if (m_controller.getYButtonPressed() == true) {
-      lemonLight = !lemonLight;
+    //intake
+    if (m_controller.getAButtonPressed()) {
+      m_cargoSlurper.set(ControlMode.PercentOutput, 100);
+    }
+    else{
+      m_cargoSlurper.set(ControlMode.PercentOutput, 0);
+    }
+    //launcher
+    if (m_controller2.getXButtonPressed()) {
+      m_frontShooter.set(ControlMode.PercentOutput, 100);
+      m_backShooter.set(ControlMode.PercentOutput, 100);
+    }
+    else{
+      m_frontShooter.set(ControlMode.PercentOutput, 0);
+      m_backShooter.set(ControlMode.PercentOutput, 0);
+    }
+    //elevator/storage
+    if (m_controller2.getAButtonPressed()){
+      m_elevator1.set(ControlMode.PercentOutput, 100);
+      m_elevator2.set(ControlMode.PercentOutput, 100);
+    }
+    else{
+      m_elevator1.set(ControlMode.PercentOutput, 0);
+      m_elevator2.set(ControlMode.PercentOutput, 0);
+    }
+    //Pnumatics
+    if (m_controller2.getYButtonPressed())
+    {
+      m_solenoid1.set(DoubleSolenoid.Value.kForward);
+    }
+    else if (m_controller2.getYButtonPressed())
+    {
+      m_solenoid1.set(DoubleSolenoid.Value.kReverse);
+    } 
+    else
+    {
+      m_solenoid1.set(DoubleSolenoid.Value.kOff);
     }
 
-    if (lemonLight == true) {
-      NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(3);
-    } else if (lemonLight == false) {
-      NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
-    }
+
   }
 
   /** This function is called once when the robot is disabled. */
