@@ -19,10 +19,13 @@ import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
-import edu.wpi.first.wpilibj.GenericHID;
+//import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.PneumaticsModuleType;
 import edu.wpi.first.wpilibj.Compressor;
-import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
+//import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
+import edu.wpi.first.wpilibj.PowerDistribution;
+import edu.wpi.first.wpilibj.PowerDistribution.ModuleType;
+
 
 
 import com.ctre.phoenix.motorcontrol.ControlMode;
@@ -44,7 +47,7 @@ public class Robot extends TimedRobot {
   private String m_autoSelected;
   private final SendableChooser<String> m_chooser = new SendableChooser<>();
 
-  private double auto;
+  private Timer auto;
   
   private DifferentialDrive m_myRobot;
   private CANSparkMax m_frontLeft;
@@ -75,12 +78,26 @@ public class Robot extends TimedRobot {
   boolean enabled = compressor.enabled();
   boolean pressureSwitch = compressor.getPressureSwitchValue();
 
+  double speed;
+  double speed2;
+
+  boolean triggerHappy;
+  boolean isTankDrive;
+  boolean sucking;
+
+  private PowerDistribution m_pdp;
+  double voltage;
+
+  boolean doingYourMom;
+
+
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
    */
   @Override
   public void robotInit() {
+    auto = new Timer();
     m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
     m_chooser.addOption("My Auto", kCustomAuto);
     SmartDashboard.putData("Auto choices", m_chooser);
@@ -94,6 +111,8 @@ public class Robot extends TimedRobot {
     //shooter motors
     m_backShooter = new VictorSPX(6);
     m_frontShooter = new VictorSPX(7);
+    m_backShooter.setInverted(true);
+    m_frontShooter.setInverted(true);
 
     //elevator and cargo slurper motors
     m_elevator1 = new VictorSPX(8);
@@ -118,6 +137,15 @@ public class Robot extends TimedRobot {
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
 
     m_frontLeft.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity();
+
+    triggerHappy = false;
+    isTankDrive = true;
+    sucking = false;
+
+    m_pdp = new PowerDistribution(0, ModuleType.kCTRE);
+
+    doingYourMom = false;
+
   }
 
   /**
@@ -129,12 +157,22 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotPeriodic() {
+    voltage = m_pdp.getVoltage();
     uptime = Timer.getFPGATimestamp();
     SmartDashboard.putNumber("Uptime", uptime);
     SmartDashboard.putNumber("Front Left Motor RPM", m_frontLeft.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
     SmartDashboard.putNumber("Front Right Motor RPM", m_frontRight.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
     SmartDashboard.putNumber("Rear Left Motor RPM", m_rearLeft.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
     SmartDashboard.putNumber("Rear Right Motor RPM", m_rearRight.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
+    SmartDashboard.putBoolean("Is Tank Drive", isTankDrive);
+    SmartDashboard.putBoolean("Is Trigger Happy?", triggerHappy);
+    SmartDashboard.putNumber("Total Voltage", voltage);
+    SmartDashboard.putBoolean("Is sucking?", sucking);
+    SmartDashboard.putBoolean("Is doing your mom?", doingYourMom);
+
+    if (triggerHappy){
+      SmartDashboard.putNumber("Shooter motor speed percentage", speed2*100);
+    }
   }
 
   /**
@@ -157,20 +195,101 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
+    
     switch (m_autoSelected) {
       case kCustomAuto:
         // Put custom auto code here
+        auto.start();
+        m_cargoSlurper.set(ControlMode.PercentOutput, 100);
+        m_frontShooter.set(ControlMode.PercentOutput, 100);
+        m_backShooter.set(ControlMode.PercentOutput, 100);
+        m_elevator1.set(ControlMode.PercentOutput, 100);
+        m_elevator2.set(ControlMode.PercentOutput, 100);
 
         break;
       case kDefaultAuto:
       default:
         // Put default auto code here
-        m_frontShooter.set(ControlMode.PercentOutput, 100);
-        m_backShooter.set(ControlMode.PercentOutput, 100);
-        m_elevator1.set(ControlMode.PercentOutput, 100);
-        m_elevator2.set(ControlMode.PercentOutput, 100);
-        m_cargoSlurper.set(ControlMode.PercentOutput, 100);
+        auto.start();
+        //test
+        // m_left.set(1.0);
+        // m_right.set(-1.0);
+        // while(true){
+        //   if(auto.get()==5){
+        //     m_left.set(-1.0);
+        //     m_right.set(1.0);
+        //   }
+        //   if(auto.get()==10){
+        //     m_left.set(1.0);
+        //     m_right.set(1.0);
+        //   }
+        //   if(auto.get()==15){
+        //     m_left.set(0);
+        //     m_right.set(0);
+        //     break;
+        //   }
+
+        //test2
+        while(auto.get()<=5){
+          m_left.set(0.1);
+          m_right.set(-0.1);
+        }
+        while(auto.get()>5 && auto.get()<=10){
+          m_left.set(-0.1);
+          m_right.set(0.1);
+        }
+        while(auto.get()>10 && auto.get()<15){
+          m_left.set(0.1);
+          m_right.set(0.1);
+        }
+        while(auto.get()==15){
+          m_left.set(0);
+          m_right.set(0);
+        }
+
+        // actual test
+        // while(auto.get()<=3){
+        //   m_cargoSlurper.set(ControlMode.PercentOutput, 100);
+        //   m_frontShooter.set(ControlMode.PercentOutput, 100);
+        //   m_backShooter.set(ControlMode.PercentOutput, 100);
+        //   m_elevator1.set(ControlMode.PercentOutput, 100);
+        //   m_elevator2.set(ControlMode.PercentOutput, 100);
+        // }
+        // m_frontShooter.set(ControlMode.PercentOutput, 0);
+        // m_backShooter.set(ControlMode.PercentOutput, 0);
+        // m_elevator1.set(ControlMode.PercentOutput, 0);
+        // m_elevator2.set(ControlMode.PercentOutput, 0);
+         
+        // while(3<auto.get()&&auto.get()<=3.5){
+        //   m_left.set(1.0);
+        //   m_right.set(1.0);
+        // }
+        // while(3.5<auto.get()&&auto.get()<=5.5){
+        //   m_cargoSlurper.set(ControlMode.PercentOutput, 100);
+        //   m_elevator1.set(ControlMode.PercentOutput, 100);
+        //   m_elevator2.set(ControlMode.PercentOutput, 100);
+        //   m_left.set(1.0);
+        //   m_right.set(-1.0);
+        // } 
+        // while(5.5<auto.get()&&auto.get()<=6){
+        //   m_left.set(1.0);
+        //   m_right.set(1.0);
+        // }
+        // while(6<auto.get() && auto.get() <= 8){
+        //   m_left.set(1.0);
+        //   m_right.set(-1.0);
+        // }
+        // while(auto.get()>8){
+        //   m_cargoSlurper.set(ControlMode.PercentOutput, 100);
+        //   m_frontShooter.set(ControlMode.PercentOutput, 100);
+        //   m_backShooter.set(ControlMode.PercentOutput, 100);
+        //   m_elevator1.set(ControlMode.PercentOutput, 100);
+        //   m_elevator2.set(ControlMode.PercentOutput, 100);
+        // } 
+
+
         break;
+      
     }
   }
 
@@ -182,47 +301,111 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
     //Drive
-    m_myRobot.tankDrive(-m_controller.getLeftY(), m_controller.getRightY());
+    if (m_controller.getLeftBumperPressed()){
+      isTankDrive = !isTankDrive;
+    }
+
+    if(isTankDrive){
+      m_myRobot.tankDrive(-m_controller.getLeftY(), m_controller.getRightY());
+    }
+    else{
+      m_myRobot.arcadeDrive(m_controller.getRightY(), m_controller.getRightX());
+    }
+
     
     //intake
-    if (m_controller.getAButtonPressed()) {
-      m_cargoSlurper.set(ControlMode.PercentOutput, 100);
+    
+    if (m_controller.getAButton()) {
+      m_cargoSlurper.set(ControlMode.PercentOutput, 1);
     }
     else{
       m_cargoSlurper.set(ControlMode.PercentOutput, 0);
     }
-    //launcher
-    if (m_controller2.getXButtonPressed()) {
-      m_frontShooter.set(ControlMode.PercentOutput, 100);
-      m_backShooter.set(ControlMode.PercentOutput, 100);
+
+    if(!sucking){
+      //launcher
+      if (m_controller2.getXButton()) {
+        m_frontShooter.set(ControlMode.PercentOutput, 0.5);
+        m_backShooter.set(ControlMode.PercentOutput, 0.5);
+      }
+      else if (m_controller2.getBButton()){
+        m_frontShooter.set(ControlMode.PercentOutput, 0.25);
+        m_backShooter.set(ControlMode.PercentOutput,  0.25);
+      }
+      else{
+        m_frontShooter.set(ControlMode.PercentOutput, 0);
+        m_backShooter.set(ControlMode.PercentOutput, 0);
+      }
+
+      speed = m_controller2.getLeftTriggerAxis();
+      m_elevator1.set(ControlMode.PercentOutput, speed);
+      m_elevator2.set(ControlMode.PercentOutput, speed);
+
+      if (m_controller2.getRightBumperPressed()){
+        triggerHappy = !triggerHappy;
+      }
+
+      if (triggerHappy){
+        speed2 = m_controller2.getRightTriggerAxis();
+        m_frontShooter.set(ControlMode.PercentOutput, speed2);
+        m_backShooter.set(ControlMode.PercentOutput, speed2);
+      }
     }
     else{
-      m_frontShooter.set(ControlMode.PercentOutput, 0);
-      m_backShooter.set(ControlMode.PercentOutput, 0);
+      //launcher
+      if (m_controller2.getXButton()) {
+        m_frontShooter.set(ControlMode.PercentOutput, -0.5);
+        m_backShooter.set(ControlMode.PercentOutput, -0.5);
+      }
+      else if (m_controller2.getBButton()){
+        m_frontShooter.set(ControlMode.PercentOutput, -0.25);
+        m_backShooter.set(ControlMode.PercentOutput,  -0.25);
+      }
+      else{
+        m_frontShooter.set(ControlMode.PercentOutput, 0);
+        m_backShooter.set(ControlMode.PercentOutput, 0);
+      }
+
+      speed = m_controller2.getLeftTriggerAxis();
+      m_elevator1.set(ControlMode.PercentOutput, -speed);
+      m_elevator2.set(ControlMode.PercentOutput, -speed);
+
+      if (m_controller2.getRightBumperPressed()){
+        triggerHappy = !triggerHappy;
+      }
+
+      if (triggerHappy){
+        speed2 = m_controller2.getRightTriggerAxis();
+        m_frontShooter.set(ControlMode.PercentOutput, -speed2);
+        m_backShooter.set(ControlMode.PercentOutput, -speed2);
+      }
     }
     //elevator/storage
-    if (m_controller2.getAButtonPressed()){
-      m_elevator1.set(ControlMode.PercentOutput, 100);
-      m_elevator2.set(ControlMode.PercentOutput, 100);
+    /*
+    if (m_controller2.getAButton()){
+      m_elevator1.set(ControlMode.PercentOutput, 1);
+      m_elevator2.set(ControlMode.PercentOutput, 1);
     }
     else{
       m_elevator1.set(ControlMode.PercentOutput, 0);
       m_elevator2.set(ControlMode.PercentOutput, 0);
-    }
+    }*/
     //Pnumatics
-    if (m_controller2.getYButtonPressed())
+    /*
+    if (m_controller2.getYButton())
     {
       m_solenoid1.set(DoubleSolenoid.Value.kForward);
     }
-    else if (m_controller2.getYButtonPressed())
+    else
     {
       m_solenoid1.set(DoubleSolenoid.Value.kReverse);
     } 
-    else
-    {
-      m_solenoid1.set(DoubleSolenoid.Value.kOff);
-    }
+    */
 
+    if(m_controller.getStartButtonPressed() || m_controller2.getStartButtonPressed()){
+      doingYourMom = true;
+    }
+    
 
   }
 
@@ -232,6 +415,7 @@ public class Robot extends TimedRobot {
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
     m_controller.setRumble(RumbleType.kLeftRumble, 0.0);
     m_controller.setRumble(RumbleType.kRightRumble, 0.0);
+    doingYourMom = false;
   }
 
   /** This function is called periodically when disabled. */
