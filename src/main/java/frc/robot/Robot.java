@@ -14,17 +14,20 @@ import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
+import edu.wpi.first.wpilibj.DriverStation;
 //import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.PneumaticsModuleType;
 import edu.wpi.first.wpilibj.Compressor;
 //import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
 import edu.wpi.first.wpilibj.PowerDistribution;
 import edu.wpi.first.wpilibj.PowerDistribution.ModuleType;
+
 
 
 
@@ -90,6 +93,8 @@ public class Robot extends TimedRobot {
 
   boolean doingYourMom;
 
+  String ally; 
+  boolean isBlue;
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -97,6 +102,15 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotInit() {
+    ally = DriverStation.getAlliance().toString();
+
+    if(ally.equals("Blue")){
+      isBlue = true;
+    }
+    else{
+      isBlue = false;
+    }
+
     auto = new Timer();
     m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
     m_chooser.addOption("My Auto", kCustomAuto);
@@ -146,6 +160,7 @@ public class Robot extends TimedRobot {
 
     doingYourMom = false;
 
+    System.out.println(ally);
   }
 
   /**
@@ -164,11 +179,12 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("Front Right Motor RPM", m_frontRight.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
     SmartDashboard.putNumber("Rear Left Motor RPM", m_rearLeft.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
     SmartDashboard.putNumber("Rear Right Motor RPM", m_rearRight.getEncoder(SparkMaxRelativeEncoder.Type.kHallSensor, 42).getVelocity());
-    SmartDashboard.putBoolean("Is Tank Drive", isTankDrive);
-    SmartDashboard.putBoolean("Is Trigger Happy?", triggerHappy);
+    SmartDashboard.putBoolean("Is Tank Drive (LJ)", isTankDrive);
+    SmartDashboard.putBoolean("Is Trigger Happy? (RB)", triggerHappy);
     SmartDashboard.putNumber("Total Voltage", voltage);
-    SmartDashboard.putBoolean("Is sucking?", sucking);
+    SmartDashboard.putBoolean("Is sucking? (LB)", sucking);
     SmartDashboard.putBoolean("Is doing your mom?", doingYourMom);
+    SmartDashboard.putBoolean("Is blue?", isBlue);
 
     if (triggerHappy){
       SmartDashboard.putNumber("Shooter motor speed percentage", speed2*100);
@@ -301,7 +317,7 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
     //Drive
-    if (m_controller.getLeftBumperPressed()){
+    if (m_controller.getLeftStickButton()){
       isTankDrive = !isTankDrive;
     }
 
@@ -320,6 +336,10 @@ public class Robot extends TimedRobot {
     }
     else{
       m_cargoSlurper.set(ControlMode.PercentOutput, 0);
+    }
+
+    if(m_controller2.getLeftBumperPressed()){
+      sucking = !sucking;
     }
 
     if(!sucking){
